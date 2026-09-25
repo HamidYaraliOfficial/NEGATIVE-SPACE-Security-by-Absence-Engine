@@ -1,0 +1,42 @@
+# NEGATIVE SPACE agent configuration
+# Secure defaults: metadata-only collection, no raw payloads.
+
+[agent]
+host_id = ""                      # auto-generated on first run if empty
+tenant_id = "default"
+environment = "production"        # production | staging | test
+tags = ["region:default"]
+
+[backend]
+url = "http://localhost:8000"
+enrollment_token = ""             # required - issued by the Agent Management Center
+verify_tls = true
+timeout_seconds = 10
+
+[collection]
+process_enabled = true
+network_enabled = true
+heartbeat_enabled = true
+heartbeat_interval_seconds = 30
+process_poll_interval_ms = 2000
+network_poll_interval_ms = 2000
+sample_rate = 1.0                 # 0.0-1.0, applied under backpressure
+
+[buffer]
+max_memory_events = 20000
+max_disk_bytes = 104857600        # 100 MiB offline queue
+spool_dir = "/var/lib/negspace-agent/spool"
+batch_size = 500
+flush_interval_ms = 3000
+compress = true
+
+[privacy]
+hash_fields = ["username", "cmdline_full", "remote_ip"]
+drop_fields = ["env_vars"]
+collect_raw_payload = false
+
+[resource_guard]
+max_cpu_percent = 5.0
+max_memory_mb = 256
+max_queue_events = 50000
+fail_mode = "fail_open"           # fail_open | fail_closed

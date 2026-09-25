@@ -1,0 +1,84 @@
+version: "3.9"
+
+# NEGATIVE SPACE - Security by Absence Engine
+# Local development stack. See README for production Kubernetes/Helm notes.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ns-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-negspace}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-negspace}
+      POSTGRES_DB: ${POSTGRES_DB:-negative_space}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ns_pg_data:/var/lib/postgresql/data
+      - ./backend-python/app/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-negspace}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: ns-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  nats:
+    image: nats:2.10-alpine
+    container_name: ns-nats
+    restart: unless-stopped
+    command: ["-js"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+
+  backend:
+    build:
+      context: ./backend-python
+      dockerfile: Dockerfile
+    container_name: ns-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-negspace}:${POSTGRES_PASSWORD:-negspace}@postgres:5432/${POSTGRES_DB:-negative_space}
+      REDIS_URL: redis://redis:6379/0
+      NATS_URL: nats://nats:4222
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      ENV: development
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend-python:/app
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ns-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_WS_URL: ws://localhost:8000
+    ports:
+      - "3000:3000"
+
+volumes:
+  ns_pg_data:
